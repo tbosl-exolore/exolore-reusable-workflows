@@ -29,7 +29,7 @@ with:
 
 The packager copies those files into the release before SSH transfer and activation, preserving their relative structure and tracked executable bit. Keep credentials and runtime environment files out of this list. Directory selections are recursive; symlinks, special Git entries, paths overlapping managed release files, and sensitive path names are rejected. Omit the input when no additional release files are required.
 
-The verification call should run for pull requests with only `contents: read`. Gate the deploy call to the same branches and manual dispatch behavior currently allowed. Make it depend on verification. Give only the deploy call `packages: write`. Keep the consumer workflow's top-level permissions empty.
+The verification call should run for pull requests with only `contents: read`. Gate the deploy call to the same branches and manual dispatch behavior currently allowed. Make it depend on verification. Give only the deploy call `packages: write`. Explicitly pass `DEPLOY_SSH_KEY` and `SSH_KNOWN_HOSTS` by name under the deploy job's `secrets:` mapping, referencing the same-named Environment secrets; do not use `secrets: inherit` or move these values to repository scope. The called deployment job keeps its `environment_name` binding, so Environment reviewers continue to gate the whole build and deployment. Keep the consumer workflow's top-level permissions empty.
 
 Pin both called workflow jobs to the same full SHA for a release. Do not use `main`, a branch, or an expression as the ref.
 

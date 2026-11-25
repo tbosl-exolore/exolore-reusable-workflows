@@ -20,6 +20,19 @@ for filename in ("verify.yml", "deploy-container.yml", "prepare-ghcr-baseline.ym
     require(re.search(r"(?m)^  workflow_call:\s*$", content) is not None, f"{filename} must be reusable")
 
 deploy = (workflow_dir / "deploy-container.yml").read_text(encoding="utf-8")
+workflow_call_secrets = deploy.split("    secrets:\n", 1)[1].split("    outputs:", 1)[0]
+for secret in ("DEPLOY_SSH_KEY", "SSH_KNOWN_HOSTS"):
+    require(re.search(rf"(?m)^      {secret}:\n        description: .+\n        required: true$", workflow_call_secrets) is not None, f"{secret} must be a required workflow_call secret")
+preflight_start = deploy.find("      - name: Validate required deployment secrets\n")
+build_start = deploy.find("      - name: Build, publish, and resolve immutable image\n")
+require(0 <= preflight_start < build_start, "required deployment secrets must be checked before image build and publication")
+preflight = deploy[preflight_start:build_start]
+for secret in ("DEPLOY_SSH_KEY", "SSH_KNOWN_HOSTS"):
+    require(f"{secret}: ${{{{ secrets.{secret} }}}}" in preflight, f"preflight must receive {secret}")
+    require(f'-z "${{{secret}:-}}"' in preflight, f"preflight must detect an empty {secret}")
+    require(f"Required secret {secret} was not provided or is empty." in preflight, f"preflight must fail clearly when {secret} is empty")
+    require("exit 1" in preflight, f"preflight must stop the workflow when a deployment secret is empty")
+    require(f'echo "${{{secret}' not in preflight, f"preflight must not log {secret}")
 require(re.search(r"(?ms)^      additional_release_paths:\n(?:(?!^      [a-z_]+:).)*?^        default: ''$", deploy) is not None, "additional_release_paths must be optional and default empty")
 require(deploy.count("ADDITIONAL_RELEASE_PATHS: ${{ inputs.additional_release_paths }}") == 1, "additional paths must be passed only to the package stage")
 package_script = (ROOT / "scripts" / "package-release.sh").read_text(encoding="utf-8")
@@ -67,5 +80,14 @@ for path in set(fixture_workflows):
     require("@main" not in content, f"{path.relative_to(ROOT)} must not use a mutable main reference")
     require(sha_pin.search(content) is not None, f"{path.relative_to(ROOT)} must demonstrate a full SHA ref")
     require("docker push" not in content, f"{path.relative_to(ROOT)} must not duplicate shared implementation")
+    if ".github/workflows/deploy-container.yml@" in content:
+        deploy_job = content.split("  deploy:\n", 1)[1] if "  deploy:\n" in content else ""
+        expected_secret_block = (
+            "    secrets:\n"
+            "      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}\n"
+            "      SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}\n"
+        )
+        require(expected_secret_block in deploy_job, f"{path.relative_to(ROOT)} must explicitly forward both named deployment secrets")
+        require("secrets: inherit" not in content, f"{path.relative_to(ROOT)} must not broadly inherit secrets")
 
 print("Workflow interface and deployment invariant checks passed.")

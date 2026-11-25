@@ -31,3 +31,6 @@ jobs:
       compose_file: compose.yaml
       project_config_file: deploy/project.env
       environment_name: production
+    secrets:
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}

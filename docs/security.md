@@ -8,7 +8,7 @@ This repository is intentionally public. Keep caller secrets and infrastructure-
 - Keep example hosts and domain names reserved for documentation, such as `example.invalid`.
 - Publish only image digests in release contracts. Never print GHCR credentials or SSH private keys.
 - Keep SSH host-key checking enabled and the private key on the consuming Environment only.
-- Keep `GITHUB_TOKEN` permissions minimal and scoped to the caller repository. Do not use `secrets: inherit`.
+- Keep `GITHUB_TOKEN` permissions minimal and scoped to the caller repository. Explicitly forward only `DEPLOY_SSH_KEY` and `SSH_KNOWN_HOSTS` by name to the deployment workflow; do not use `secrets: inherit`.
 - Check out the caller source at the caller SHA and the shared scripts at the called workflow SHA.
 - Review changes to any shell file that is sourced or executed from a caller repository as privileged code; deployment approval should gate the whole production job.
 

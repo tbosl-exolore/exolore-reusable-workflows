@@ -43,6 +43,13 @@ on:
         required: false
         type: string
         default: production
+    secrets:
+      DEPLOY_SSH_KEY:
+        description: ED25519 private key for the deployment account.
+        required: true
+      SSH_KNOWN_HOSTS:
+        description: Pinned SSH host key entry for the deployment server.
+        required: true
     outputs:
       image_ref:
         description: The successfully published GHCR image reference pinned by digest.
@@ -97,6 +104,25 @@ jobs:
           JOB_WORKFLOW_REPOSITORY: ${{ job.workflow_repository }}
           JOB_WORKFLOW_SHA: ${{ job.workflow_sha }}
         run: bash central-workflow/scripts/assert-workflow-revision.sh
+
+      - name: Validate required deployment secrets
+        shell: bash
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          missing=0
+          if [[ -z "${DEPLOY_SSH_KEY:-}" ]]; then
+            echo "::error::Required secret DEPLOY_SSH_KEY was not provided or is empty."
+            missing=1
+          fi
+          if [[ -z "${SSH_KNOWN_HOSTS:-}" ]]; then
+            echo "::error::Required secret SSH_KNOWN_HOSTS was not provided or is empty."
+            missing=1
+          fi
+          if (( missing != 0 )); then
+            exit 1
+          fi
 
       - name: Build, publish, and resolve immutable image
         id: publish

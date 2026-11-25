@@ -46,7 +46,15 @@ Create the named Environment in each consumer repository and add:
 | Secret | `DEPLOY_SSH_KEY` | yes | ED25519 private key for the deployment account |
 | Secret | `SSH_KNOWN_HOSTS` | yes | Pinned host key entry confirmed by an operator |
 
-The called deployment job attaches `environment_name` itself. Environment protection and required reviewers therefore gate the entire build, push, and deployment job, matching the existing template. Environment secrets are resolved by that called job; callers should not use `secrets: inherit` or pass broad secret sets.
+The called deployment job attaches `environment_name` itself. Environment protection and required reviewers therefore gate the entire build, push, and deployment job, matching the existing template. Each caller must explicitly forward only the required named secrets to the deploy job, as described in [GitHub's reusable workflow secret documentation](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows):
+
+```yaml
+    secrets:
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+```
+
+The reusable workflow declares both as required `workflow_call` secrets. GitHub's `required: true` checks that each secret was passed, while the pre-build check catches an empty value without printing it. Keep the secrets in the consumer's configured Environment; do not use `secrets: inherit` or move them to repository scope. The called deployment job retains its Environment binding and approval rules.
 
 The caller's `deploy/project.env` (or configured project file) must define the project slug, deployment user, container port, health path, Compose project name, and server runtime env-file path. It is sourced as Bash by the workflow and again on the server; it is trusted caller configuration, must contain no secret values, and must not be user-generated input. Keep runtime values in the server's protected `.env` file.
 
