@@ -1,0 +1,61 @@
+name: Reusable application verification
+
+on:
+  workflow_call:
+    inputs:
+      working_directory:
+        description: Caller repository directory containing the application and test script.
+        required: false
+        type: string
+        default: .
+      test_script:
+        description: Caller-owned Bash script path, relative to working_directory.
+        required: false
+        type: string
+        default: scripts/ci.sh
+
+permissions: {}
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out caller repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Validate and run project test hook
+        shell: bash
+        env:
+          WORKING_DIRECTORY: ${{ inputs.working_directory }}
+          TEST_SCRIPT: ${{ inputs.test_script }}
+        run: |
+          set -Eeuo pipefail
+          root="$(realpath -e -- "$GITHUB_WORKSPACE")"
+          workdir="$(realpath -e -- "$root/$WORKING_DIRECTORY")"
+          [[ "$workdir" == "$root" || "$workdir" == "$root/"* ]] || {
+            echo "::error::working_directory must stay inside the caller checkout"
+            exit 1
+          }
+          [[ -n "$TEST_SCRIPT" && "$TEST_SCRIPT" != /* ]] || {
+            echo "::error::test_script must be a non-empty relative path"
+            exit 1
+          }
+          test_script="$(realpath -e -- "$workdir/$TEST_SCRIPT")"
+          [[ -f "$test_script" && "$test_script" == "$workdir/"* ]] || {
+            echo "::error::test_script must resolve to a file inside working_directory"
+            exit 1
+          }
+          cd "$workdir"
+          if bash "$test_script"; then
+            :
+          else
+            status=$?
+            echo "::error::Project test hook failed (exit $status): $TEST_SCRIPT"
+            exit "$status"
+          fi

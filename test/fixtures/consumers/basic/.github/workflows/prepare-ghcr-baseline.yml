@@ -1,0 +1,23 @@
+name: Prepare GHCR baseline
+
+on:
+  workflow_dispatch:
+    inputs:
+      production_sha:
+        description: Exact production commit SHA
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  baseline:
+    uses: tbosl-exolore/exolore-reusable-workflows/.github/workflows/prepare-ghcr-baseline.yml@0123456789abcdef0123456789abcdef01234567
+    permissions:
+      contents: read
+      packages: write
+    with:
+      production_sha: ${{ inputs.production_sha }}
+      working_directory: .
+      build_context: .
+      dockerfile: Dockerfile

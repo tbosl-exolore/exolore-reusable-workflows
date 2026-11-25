@@ -1,0 +1,33 @@
+name: Monorepo CI/CD
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  verify:
+    uses: tbosl-exolore/exolore-reusable-workflows/.github/workflows/verify.yml@0123456789abcdef0123456789abcdef01234567
+    permissions:
+      contents: read
+    with:
+      working_directory: services/api
+      test_script: scripts/ci.sh
+
+  deploy:
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    needs: verify
+    uses: tbosl-exolore/exolore-reusable-workflows/.github/workflows/deploy-container.yml@0123456789abcdef0123456789abcdef01234567
+    permissions:
+      contents: read
+      packages: write
+    with:
+      working_directory: services/api
+      build_context: .
+      dockerfile: Dockerfile
+      build_hook: scripts/prepare-build.sh
+      compose_file: compose.yaml
+      project_config_file: deploy/project.env
+      environment_name: production

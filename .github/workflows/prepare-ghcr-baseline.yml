@@ -1,0 +1,79 @@
+name: Reusable GHCR migration baseline
+
+on:
+  workflow_call:
+    inputs:
+      production_sha:
+        description: Exact 40-character caller commit currently running in production.
+        required: true
+        type: string
+      working_directory:
+        description: Caller repository directory containing the Docker build contract.
+        required: false
+        type: string
+        default: .
+      build_context:
+        description: Docker build context, relative to working_directory.
+        required: false
+        type: string
+        default: .
+      dockerfile:
+        description: Dockerfile path, relative to working_directory.
+        required: false
+        type: string
+        default: Dockerfile
+    outputs:
+      image_ref:
+        description: The baseline image reference pinned by digest.
+        value: ${{ jobs.baseline.outputs.image_ref }}
+      image_digest:
+        description: The validated SHA-256 digest of the baseline image.
+        value: ${{ jobs.baseline.outputs.image_digest }}
+
+permissions: {}
+
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_ref: ${{ steps.baseline.outputs.image_ref }}
+      image_digest: ${{ steps.baseline.outputs.image_digest }}
+    steps:
+      - name: Check out exact caller production commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ inputs.production_sha }}
+          persist-credentials: false
+          path: caller
+
+      - name: Check out this workflow's exact revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          persist-credentials: false
+          path: central-workflow
+
+      - name: Verify central script revision
+        shell: bash
+        env:
+          JOB_WORKFLOW_REPOSITORY: ${{ job.workflow_repository }}
+          JOB_WORKFLOW_SHA: ${{ job.workflow_sha }}
+        run: bash central-workflow/scripts/assert-workflow-revision.sh
+
+      - name: Build exact baseline and resolve immutable image
+        id: baseline
+        shell: bash
+        env:
+          PRODUCTION_SHA: ${{ inputs.production_sha }}
+          WORKING_DIRECTORY: ${{ inputs.working_directory }}
+          BUILD_CONTEXT: ${{ inputs.build_context }}
+          DOCKERFILE: ${{ inputs.dockerfile }}
+          GHCR_TOKEN: ${{ github.token }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: bash central-workflow/scripts/prepare-ghcr-baseline.sh

@@ -1,0 +1,153 @@
+name: Reusable container deployment
+
+on:
+  workflow_call:
+    inputs:
+      working_directory:
+        description: Caller repository directory containing the build and deployment contract.
+        required: false
+        type: string
+        default: .
+      build_context:
+        description: Docker build context, relative to working_directory.
+        required: false
+        type: string
+        default: .
+      dockerfile:
+        description: Dockerfile path, relative to working_directory.
+        required: false
+        type: string
+        default: Dockerfile
+      build_hook:
+        description: Optional caller-owned Bash preparation hook, relative to working_directory.
+        required: false
+        type: string
+        default: ''
+      compose_file:
+        description: Docker Compose file to package for the server.
+        required: false
+        type: string
+        default: compose.yaml
+      project_config_file:
+        description: Non-secret deployment configuration file to package.
+        required: false
+        type: string
+        default: deploy/project.env
+      environment_name:
+        description: Caller repository environment used for deployment protection and secrets.
+        required: false
+        type: string
+        default: production
+    outputs:
+      image_ref:
+        description: The successfully published GHCR image reference pinned by digest.
+        value: ${{ jobs.deploy.outputs.image_ref }}
+      image_digest:
+        description: The validated SHA-256 digest of the published image.
+        value: ${{ jobs.deploy.outputs.image_digest }}
+      source_sha:
+        description: Caller commit recorded as the OCI revision label.
+        value: ${{ jobs.deploy.outputs.source_sha }}
+
+permissions: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment_name }}
+    concurrency:
+      group: ${{ github.repository }}-production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_ref: ${{ steps.publish.outputs.image_ref }}
+      image_digest: ${{ steps.publish.outputs.image_digest }}
+      source_sha: ${{ steps.publish.outputs.source_sha }}
+      project_slug: ${{ steps.publish.outputs.project_slug }}
+      release_id: ${{ steps.publish.outputs.release_id }}
+      archive_path: ${{ steps.publish.outputs.archive_path }}
+    steps:
+      - name: Check out caller repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          path: caller
+
+      - name: Check out this workflow's exact revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          persist-credentials: false
+          path: central-workflow
+
+      - name: Verify central script revision
+        shell: bash
+        env:
+          JOB_WORKFLOW_REPOSITORY: ${{ job.workflow_repository }}
+          JOB_WORKFLOW_SHA: ${{ job.workflow_sha }}
+        run: bash central-workflow/scripts/assert-workflow-revision.sh
+
+      - name: Build, publish, and resolve immutable image
+        id: publish
+        shell: bash
+        env:
+          WORKING_DIRECTORY: ${{ inputs.working_directory }}
+          BUILD_CONTEXT: ${{ inputs.build_context }}
+          DOCKERFILE: ${{ inputs.dockerfile }}
+          BUILD_HOOK: ${{ inputs.build_hook }}
+          PROJECT_CONFIG_FILE: ${{ inputs.project_config_file }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+          GHCR_TOKEN: ${{ github.token }}
+          SERVER_HOST: ${{ vars.SERVER_HOST }}
+          SERVER_USER: ${{ vars.SERVER_USER }}
+          DEPLOY_ROOT_OVERRIDE: ${{ vars.DEPLOY_ROOT }}
+          APP_PORT: ${{ vars.APP_PORT }}
+          RELEASE_RETENTION: ${{ vars.RELEASE_RETENTION }}
+        run: bash central-workflow/scripts/deploy-container.sh
+
+      - name: Configure verified SSH and package release contract
+        shell: bash
+        env:
+          WORKING_DIRECTORY: ${{ inputs.working_directory }}
+          COMPOSE_FILE: ${{ inputs.compose_file }}
+          PROJECT_CONFIG_FILE: ${{ inputs.project_config_file }}
+          IMAGE_REF: ${{ steps.publish.outputs.image_ref }}
+          SOURCE_SHA: ${{ steps.publish.outputs.source_sha }}
+          PROJECT_SLUG: ${{ steps.publish.outputs.project_slug }}
+          RELEASE_ID: ${{ steps.publish.outputs.release_id }}
+          ARCHIVE_PATH: ${{ steps.publish.outputs.archive_path }}
+          RUNNER_TEMP: ${{ runner.temp }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+          SERVER_HOST: ${{ vars.SERVER_HOST }}
+          SERVER_USER: ${{ vars.SERVER_USER }}
+          DEPLOY_ROOT_OVERRIDE: ${{ vars.DEPLOY_ROOT }}
+          APP_PORT: ${{ vars.APP_PORT }}
+          RELEASE_RETENTION: ${{ vars.RELEASE_RETENTION }}
+        run: bash central-workflow/scripts/package-release.sh
+
+      - name: Upload and activate release with health verification and rollback
+        shell: bash
+        env:
+          SERVER_HOST: ${{ vars.SERVER_HOST }}
+          SERVER_USER: ${{ vars.SERVER_USER }}
+          PROJECT_SLUG: ${{ steps.publish.outputs.project_slug }}
+          DEPLOY_ROOT: ${{ steps.publish.outputs.deploy_root }}
+          APP_PORT: ${{ steps.publish.outputs.app_port }}
+          RELEASE_RETENTION: ${{ steps.publish.outputs.release_retention }}
+          SOURCE_SHA: ${{ steps.publish.outputs.source_sha }}
+          RELEASE_ID: ${{ steps.publish.outputs.release_id }}
+          ARCHIVE_PATH: ${{ steps.publish.outputs.archive_path }}
+        run: bash central-workflow/scripts/activate-remote.sh
+
+      - name: Remove temporary SSH key material
+        if: ${{ always() }}
+        shell: bash
+        run: rm -f -- "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
