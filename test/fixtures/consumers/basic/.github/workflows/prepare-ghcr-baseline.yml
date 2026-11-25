@@ -12,7 +12,7 @@ permissions: {}
 
 jobs:
   baseline:
-    uses: tbosl-exolore/exolore-reusable-workflows/.github/workflows/prepare-ghcr-baseline.yml@0123456789abcdef0123456789abcdef01234567
+    uses: tbosl-exolore/exolore-reusable-workflows/.github/workflows/prepare-ghcr-baseline.yml@v1
     permissions:
       contents: read
       packages: write

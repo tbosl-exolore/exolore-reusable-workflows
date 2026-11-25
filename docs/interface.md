@@ -1,6 +1,6 @@
 # Reusable workflow interface
 
-All workflow files are in `.github/workflows` and expose `workflow_call`. Callers supply a literal full-SHA workflow reference. These workflows run against the caller repository and its event commit; central workflow source is only used for the shared scripts.
+All workflow files are in `.github/workflows` and expose `workflow_call`. Callers use a literal lightweight major-version tag such as `v1`, or a full commit SHA for immutable pinning. These workflows run against the caller repository and its event commit; central workflow source is only used for the shared scripts.
 
 ## Verification
 
@@ -93,7 +93,7 @@ It checks out and verifies the caller commit, then creates a unique attempt tag,
 - In a called workflow, `github.repository`, `github.sha`, `github.ref`, and `GITHUB_TOKEN` refer to the caller. `actions/checkout` checks out the caller unless a repository is explicitly supplied.
 - Caller workflow-level `env` values do not propagate. Use the typed inputs above or variables on the caller Environment.
 - A reusable-workflow call is a job; the caller cannot add steps to that job or set its `environment`. The shared deploy job therefore declares the consumer Environment.
-- Workflow references cannot be built from expressions. Pin a full SHA in the caller YAML.
+- Workflow references cannot be built from expressions. Use a lightweight major-version tag such as `v1` or a full commit SHA in the caller YAML.
 - `GITHUB_TOKEN` permissions can only be reduced in the called workflow, never elevated over the caller grant.
 - Public reusable workflows work for eligible public and private callers, subject to consumer organization Actions policy. A public caller cannot use a private reusable workflow. Private cross-repository sharing is limited by GitHub's owner, organization, and enterprise access settings.
 - These workflows use GitHub.com [`job.workflow_repository` and `job.workflow_sha`](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts) to fetch the central scripts at the exact called commit. GitHub Enterprise Server versions that do not expose those context properties are not supported by this implementation. The pinned actionlint release does not yet model those documented fields, so validation suppresses only its two unknown-property diagnostics; all other actionlint checks remain enabled.

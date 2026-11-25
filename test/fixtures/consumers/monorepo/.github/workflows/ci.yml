@@ -9,7 +9,7 @@ permissions: {}
 
 jobs:
   verify:
-    uses: tbosl-exolore/exolore-reusable-workflows/.github/workflows/verify.yml@0123456789abcdef0123456789abcdef01234567
+    uses: tbosl-exolore/exolore-reusable-workflows/.github/workflows/verify.yml@v1
     permissions:
       contents: read
     with:
@@ -19,7 +19,7 @@ jobs:
   deploy:
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     needs: verify
-    uses: tbosl-exolore/exolore-reusable-workflows/.github/workflows/deploy-container.yml@0123456789abcdef0123456789abcdef01234567
+    uses: tbosl-exolore/exolore-reusable-workflows/.github/workflows/deploy-container.yml@v1
     permissions:
       contents: read
       packages: write

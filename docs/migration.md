@@ -31,7 +31,7 @@ The packager copies those files into the release before SSH transfer and activat
 
 The verification call should run for pull requests with only `contents: read`. Gate the deploy call to the same branches and manual dispatch behavior currently allowed. Make it depend on verification. Give only the deploy call `packages: write`. Explicitly pass `DEPLOY_SSH_KEY` and `SSH_KNOWN_HOSTS` by name under the deploy job's `secrets:` mapping, referencing the same-named Environment secrets; do not use `secrets: inherit` or move these values to repository scope. The called deployment job keeps its `environment_name` binding, so Environment reviewers continue to gate the whole build and deployment. Keep the consumer workflow's top-level permissions empty.
 
-Pin both called workflow jobs to the same full SHA for a release. Do not use `main`, a branch, or an expression as the ref.
+Reference the same lightweight major-version tag (`v1`) or full commit SHA in all central workflow calls. Do not use `main`, a branch, or an expression as the ref.
 
 ## 4. Validate away from production
 

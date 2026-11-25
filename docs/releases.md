@@ -2,48 +2,81 @@
 
 ## Versioning policy
 
-Release reusable workflow changes as semantic versions (`v1.0.0`, `v1.1.0`, `v2.0.0`) with a changelog entry. Document inputs, secrets/variables, outputs, permission changes, deployment contract changes, and migration notes for each release.
+Release reusable workflow changes using semantic versioning:
 
-Consumers must pin calls to the complete 40-character commit SHA. Annotated release tags are for people and release notes; a mutable major tag such as `v1` is not a reproducible consumer reference. Protect release tags and limit who can create or move them. Pin actions used by the reusable workflows to full SHAs as well.
+- Patch releases (`v1.0.1`): compatible bug fixes.
+- Minor releases (`v1.1.0`): compatible features and optional interface extensions.
+- Major releases (`v2.0.0`): breaking changes requiring explicit consumer migration.
 
-All central scripts executed by a workflow are checked out from `job.workflow_repository@job.workflow_sha`, and the job asserts that the checkout is the expected public repository at that exact commit. Do not replace this with a `main` checkout or a tag lookup.
+Immutable semantic release tags identify individual releases. Moving major-version tags such as `v1` reference the latest approved compatible release.
 
-## First versioned release checklist
+Consumers use `@v1` by default. A full 40-character commit SHA remains available as an immutable alternative.
 
-The current working tree is an implementation candidate, not a release. After review and approval:
+Moving major-version tags must be lightweight Git tags. Annotated tags can cause a mismatch between `job.workflow_sha` and the checked-out commit.
 
-1. Run `bash scripts/validate.sh` on a Bash-capable host with Python 3 and `actionlint` available.
-2. Inspect the complete diff and public-content scan; confirm the public repository contains no secrets, private hostnames/IPs, customer configuration, or internal-only notes.
-3. Commit the approved implementation to the central repository's default branch.
-4. Push that commit to GitHub using the repository's normal approved process.
-5. Record the full commit SHA from the pushed commit and create an annotated semantic version tag at that commit, for example `v1.0.0`.
-6. Protect the tag/release from unauthorized movement and publish release notes describing the interface and compatibility contract.
-7. Reference the full 40-character commit SHA in a sandbox caller—not `main` or the release tag—and verify the repository visibility, Environment protection, outputs, GHCR package permissions, SSH host verification, health checks, and rollback.
-8. Only after the sandbox call passes, open a separate reviewed consumer migration PR. Do not migrate consumers as part of this repository release.
+## Release checklist
 
-Example operator commands after approval (review the staged list before committing):
+1. Review the complete implementation diff.
+2. Run `bash scripts/validate.sh`.
+3. Verify that the public repository contains no secrets or customer-specific configuration.
+4. Commit and push the approved implementation.
+5. Validate the candidate using its exact commit SHA in an appropriate test consumer.
+6. Create an annotated semantic version tag and publish release notes.
+7. Move the lightweight major-version tag to the approved release commit.
+8. Monitor subsequent consumer workflow runs.
+
+Use a risk-appropriate test environment. Validate deployment and rollback behavior whenever relevant to the changes.
+
+## Publishing a compatible release
+
+Example for a future release `v1.0.1`, after validation and approval:
 
 ```bash
-git add .github/workflows README.md docs scripts test
-git diff --cached --check
-git commit -m "feat: add Exolore reusable workflows"
-git push origin main
-git rev-parse HEAD
-git tag -a v1.0.0 -m "Exolore reusable workflows v1.0.0"
-git push origin v1.0.0
+git tag -a v1.0.1 -m "Exolore reusable workflows v1.0.1"
+git push origin refs/tags/v1.0.1
+
+gh release create v1.0.1 --verify-tag --generate-notes
 ```
 
-Use the full SHA printed by `git rev-parse HEAD` in sandbox callers. Create/publish the GitHub Release after the tag is pushed and the SHA-pinned sandbox call passes. Apply the repository's branch and tag protections before consumer rollout.
+Update the moving major-version tag:
 
-This agent does not commit, push, or create a release. The first release remains a human-approved repository operation.
+```bash
+old="$(git ls-remote --exit-code origin refs/tags/v1 | cut -f1)"
 
-## Upgrade process
+git tag -f --no-sign v1 'v1.0.1^{}'
 
-For each central release, provide a consumer PR that changes the full-SHA reference and records the matching semantic version beside it. Run consumer validation and sandbox deployment before merge. Keep the previous SHA in the PR diff/history so reverting the caller reference is straightforward. Upgrade consumers deliberately; central `main` does not change the behavior of pinned callers.
+git push --force-with-lease="refs/tags/v1:$old" \
+  origin refs/tags/v1
+
+git ls-remote origin refs/tags/v1
+```
+
+The remote major-version tag must resolve directly to the intended commit.
+
+Never move an existing semantic release tag. Only authorized maintainers may update moving major-version tags.
+
+## Consumer upgrades
+
+Consumers referencing `@v1` automatically receive compatible updates on subsequent new workflow runs. Moving the tag does not itself trigger deployments in consumer repositories.
+
+Avoid moving major-version tags while consumer workflows are active.
+
+Consumers pinned to a full commit SHA require an explicit reference update. Breaking changes require migration to a new major-version tag.
+
+To recover from a defective central release, restore the major-version tag to the last known good release commit using the same protected update procedure.
+
+## Security and reproducibility
+
+All central scripts executed by a workflow are checked out from `job.workflow_repository@job.workflow_sha`. The workflow verifies the exact checked-out revision before executing central scripts.
+
+Do not replace this verification with a branch checkout or an independent lookup of the moving tag.
+
+External GitHub Actions remain pinned to full commit SHAs. Production images remain pinned to validated immutable digests.
+
+A moving major-version tag trades immutable consumer version binding for centralized upgrade management. Use full commit-SHA references where strict reproducibility is required.
 
 ## Compatibility
 
-- Patch releases should fix bugs without changing input meaning or deployment semantics.
-- Minor releases may add optional inputs/outputs and new compatible features.
-- Major releases may remove/rename fields, change environment contracts, or change release behavior; include a migration guide and a tested compatibility path.
-- Do not change the Docker Compose `app` service contract, server release metadata, health-check/rollback sequence, or environment secret names without documenting the migration and testing it against old releases.
+Do not change required inputs, environment secret names, Docker Compose contracts, release metadata, or deployment and rollback semantics incompatibly within an existing major version.
+
+Document relevant interface changes, deployment behavior changes, and migration requirements in each release.

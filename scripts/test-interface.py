@@ -70,7 +70,7 @@ require("StrictHostKeyChecking=yes" in (ROOT / "scripts" / "activate-remote.sh")
 require("docker image prune" not in activation, "activation must not prune images server-wide")
 require("--connect-timeout 2 --max-time 5" in activation, "health requests must have explicit timeouts")
 
-sha_pin = re.compile(r"@[0-9a-f]{40}(?:\s|$)")
+workflow_ref = re.compile(r"(?:v1|[0-9a-f]{40})")
 fixtures = ROOT / "test" / "fixtures" / "consumers"
 fixture_workflows = list(fixtures.glob("*/.github/workflows/*.yml")) + list(fixtures.glob("*/**/.github/workflows/*.yml"))
 require(fixture_workflows, "representative consumer workflows must exist")
@@ -78,7 +78,15 @@ for path in set(fixture_workflows):
     content = path.read_text(encoding="utf-8")
     require("uses: tbosl-exolore/exolore-reusable-workflows/.github/workflows/" in content, f"{path.relative_to(ROOT)} must call central workflows")
     require("@main" not in content, f"{path.relative_to(ROOT)} must not use a mutable main reference")
-    require(sha_pin.search(content) is not None, f"{path.relative_to(ROOT)} must demonstrate a full SHA ref")
+    refs = re.findall(
+        r"uses: tbosl-exolore/exolore-reusable-workflows/\.github/workflows/[^@\s]+@(\S+)",
+        content,
+    )
+    require(
+        refs and all(workflow_ref.fullmatch(ref) for ref in refs),
+        f"{path.relative_to(ROOT)} must use v1 or a full SHA",
+    )
+    require(len(set(refs)) == 1, "Central workflow refs must match")
     require("docker push" not in content, f"{path.relative_to(ROOT)} must not duplicate shared implementation")
     if ".github/workflows/deploy-container.yml@" in content:
         deploy_job = content.split("  deploy:\n", 1)[1] if "  deploy:\n" in content else ""

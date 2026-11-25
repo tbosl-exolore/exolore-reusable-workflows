@@ -12,6 +12,12 @@ Versioned GitHub Actions workflows for caller-owned application verification and
 
 Read [the workflow interface](docs/interface.md), [migration guide](docs/migration.md), and [release and upgrade guide](docs/releases.md) before adopting a workflow.
 
+## Versioning
+
+Use `@v1` in consumer workflows to receive compatible updates.
+Moving major-version tags must be lightweight Git tags.
+For immutable version references, use a full commit SHA instead.
+
 ## Security and support
 
 This repository contains no consumer secrets or production host details. Secrets and production variables are configured in the caller repository's protected Environment. The deployed image is always referenced by a validated digest. Central deployment scripts are checked out using the exact repository and commit SHA of the called reusable workflow.
