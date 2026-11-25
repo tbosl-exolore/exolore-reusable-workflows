@@ -9,6 +9,7 @@ for file in "${shell_files[@]}"; do bash -n "$file"; done
 "$python_bin" "$root/scripts/test-public-content.py"
 bash "$root/scripts/test-digest-resolution.sh"
 bash "$root/scripts/test-deploy-container.sh"
+bash "$root/scripts/test-package-release.sh"
 bash "$root/scripts/test-baseline.sh"
 bash "$root/scripts/test-activation.sh"
 

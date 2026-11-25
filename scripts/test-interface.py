@@ -20,6 +20,12 @@ for filename in ("verify.yml", "deploy-container.yml", "prepare-ghcr-baseline.ym
     require(re.search(r"(?m)^  workflow_call:\s*$", content) is not None, f"{filename} must be reusable")
 
 deploy = (workflow_dir / "deploy-container.yml").read_text(encoding="utf-8")
+require(re.search(r"(?ms)^      additional_release_paths:\n(?:(?!^      [a-z_]+:).)*?^        default: ''$", deploy) is not None, "additional_release_paths must be optional and default empty")
+require(deploy.count("ADDITIONAL_RELEASE_PATHS: ${{ inputs.additional_release_paths }}") == 1, "additional paths must be passed only to the package stage")
+package_script = (ROOT / "scripts" / "package-release.sh").read_text(encoding="utf-8")
+require("git -C \"$root\" rev-parse --verify HEAD" in package_script, "packaging must verify the caller checkout SHA")
+require("git -C \"$root\" cat-file blob" in package_script, "additional files must come from the verified caller Git objects")
+require("deploy-release-id.txt" in package_script and "deploy/activate-release.sh" in package_script, "managed release paths must remain centrally packaged")
 baseline = (workflow_dir / "prepare-ghcr-baseline.yml").read_text(encoding="utf-8")
 for content, name in ((deploy, "deploy-container.yml"), (baseline, "prepare-ghcr-baseline.yml")):
     require("repository: ${{ job.workflow_repository }}" in content, f"{name} must check out the called workflow repository")

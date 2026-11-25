@@ -25,6 +25,7 @@ Workflow: `.github/workflows/deploy-container.yml`
 | `build_hook` | string | empty | Optional caller Bash script, run before Docker build |
 | `compose_file` | string | `compose.yaml` | Compose file packaged as `compose.yaml` in the release |
 | `project_config_file` | string | `deploy/project.env` | Non-secret project config packaged as `deploy/project.env` |
+| `additional_release_paths` | string | empty | Optional newline-separated repository-relative files or directories copied into the release at their same paths |
 | `environment_name` | string | `production` | Consumer Environment used for protection rules, variables, and secrets |
 
 The caller must grant `contents: read` and `packages: write` to the reusable workflow call job. The shared job further limits its own token scope to those permissions. It checks out the caller repository and the central repository at `job.workflow_repository` and `job.workflow_sha`, then verifies that the checkout is the expected central repo and exact workflow commit before executing central scripts.
@@ -49,7 +50,18 @@ The called deployment job attaches `environment_name` itself. Environment protec
 
 The caller's `deploy/project.env` (or configured project file) must define the project slug, deployment user, container port, health path, Compose project name, and server runtime env-file path. It is sourced as Bash by the workflow and again on the server; it is trusted caller configuration, must contain no secret values, and must not be user-generated input. Keep runtime values in the server's protected `.env` file.
 
-The Compose contract is a service named `app` using `APP_IMAGE`, `APP_ENV_FILE`, `APP_PORT`, and `CONTAINER_PORT`. The image must be pulled by digest. The release archive contains only Compose configuration, project configuration, image digest, source SHA, release ID, and the central activation script. It excludes runtime `.env` data and SSH credentials.
+`additional_release_paths` is an optional multiline string with one path per non-empty line. Paths are relative to the caller repository root, regardless of `working_directory`; blank lines are ignored. Use a YAML literal block for multiple entries:
+
+```yaml
+with:
+  additional_release_paths: |
+    deploy/backup-agenda.sh
+    deploy/systemd
+```
+
+Files and directory contents keep their repository-relative paths in the release archive. Git-tracked executable bits are retained. The package step reads blobs from the checked-out caller commit at `SOURCE_SHA`, so untracked or locally modified worktree content is not included. The input defaults to empty and leaves the existing release layout unchanged.
+
+The Compose contract is a service named `app` using `APP_IMAGE`, `APP_ENV_FILE`, `APP_PORT`, and `CONTAINER_PORT`. The image must be pulled by digest. The release archive contains Compose configuration, project configuration, image digest, source SHA, release ID, the central activation script, and only the explicitly selected additional paths. Additional paths cannot replace centrally managed release files. Runtime `.env` data, credential-named paths, Git metadata, symlinks, submodules, and non-regular files are rejected; SSH credentials are never packaged.
 
 ### Outputs
 

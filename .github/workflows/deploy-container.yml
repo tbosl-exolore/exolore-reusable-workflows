@@ -33,6 +33,11 @@ on:
         required: false
         type: string
         default: deploy/project.env
+      additional_release_paths:
+        description: Optional newline-separated, repository-relative files or directories to include in each release archive.
+        required: false
+        type: string
+        default: ''
       environment_name:
         description: Caller repository environment used for deployment protection and secrets.
         required: false
@@ -102,6 +107,7 @@ jobs:
           DOCKERFILE: ${{ inputs.dockerfile }}
           BUILD_HOOK: ${{ inputs.build_hook }}
           PROJECT_CONFIG_FILE: ${{ inputs.project_config_file }}
+
           GITHUB_RUN_ID: ${{ github.run_id }}
           GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
           GHCR_TOKEN: ${{ github.token }}
@@ -118,6 +124,7 @@ jobs:
           WORKING_DIRECTORY: ${{ inputs.working_directory }}
           COMPOSE_FILE: ${{ inputs.compose_file }}
           PROJECT_CONFIG_FILE: ${{ inputs.project_config_file }}
+          ADDITIONAL_RELEASE_PATHS: ${{ inputs.additional_release_paths }}
           IMAGE_REF: ${{ steps.publish.outputs.image_ref }}
           SOURCE_SHA: ${{ steps.publish.outputs.source_sha }}
           PROJECT_SLUG: ${{ steps.publish.outputs.project_slug }}

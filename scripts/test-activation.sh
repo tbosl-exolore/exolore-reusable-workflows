@@ -81,6 +81,10 @@ make_old_release() {
   local release="$deploy_root/releases/$old_sha"
   mkdir -p "$release/deploy"
   cp "$basic_compose" "$release/compose.yaml"
+  printf '%s\n' 'legacy backup runner' > "$release/deploy/backup-agenda.sh"
+  chmod 0755 "$release/deploy/backup-agenda.sh"
+  mkdir -p "$release/deploy/systemd"
+  printf '%s\n' 'legacy backup unit' > "$release/deploy/systemd/backup.service"
   cat > "$release/deploy/project.env" <<EOF
 PROJECT_SLUG=fixture-app
 DEPLOY_USER=deploy
@@ -112,6 +116,10 @@ EOF
   printf 'APP_IMAGE=ghcr.io/example/app@%s\n' "$new_digest" > "$staging/deploy/image.env"
   printf '%s\n' "$new_sha" > "$staging/deploy-sha.txt"
   printf '%s\n' "$release_id" > "$staging/deploy-release-id.txt"
+  printf 'backup runner for %s\n' "$release_id" > "$staging/deploy/backup-agenda.sh"
+  chmod 0755 "$staging/deploy/backup-agenda.sh"
+  mkdir -p "$staging/deploy/systemd"
+  printf 'backup unit for %s\n' "$release_id" > "$staging/deploy/systemd/backup.service"
   tar -czf "$archive" -C "$staging" .
   rm -rf "$staging"
 }
@@ -126,6 +134,8 @@ make_new_archive "$initial_root" "$initial_id" "$initial_archive" "$basic_compos
 bash "$root/scripts/activate-release.sh" "$new_sha" "$initial_id" fixture-app "$initial_root" 18080 5 "$initial_archive"
 [[ -L "$initial_root/current" ]]
 [[ "$(basename -- "$(readlink -f "$initial_root/current")")" == "$initial_id" ]]
+[[ "$(cat "$initial_root/current/deploy/backup-agenda.sh")" == "backup runner for $initial_id" ]]
+[[ "$(cat "$initial_root/current/deploy/systemd/backup.service")" == "backup unit for $initial_id" ]]
 
 # Existing deployment: use the monorepo fixture, verify successful activation,
 # and confirm release retention does not invoke server-wide image pruning.
@@ -139,6 +149,8 @@ bash "$root/scripts/activate-release.sh" "$new_sha" "$success_id" fixture-app "$
 [[ "$(basename -- "$(readlink -f "$success_root/current")")" == "$success_id" ]]
 [[ ! -e "$success_root/releases/$old_sha" ]]
 [[ "$(head -n1 "$TEST_STATE")" == "ghcr.io/example/app@$new_digest" ]]
+[[ "$(cat "$success_root/current/deploy/backup-agenda.sh")" == "backup runner for $success_id" ]]
+[[ "$(cat "$success_root/current/deploy/systemd/backup.service")" == "backup unit for $success_id" ]]
 
 # An unhealthy new release leaves current on the prior release and restarts
 # that release. Both Compose fixture forms are exercised across these cases.
@@ -157,6 +169,9 @@ fi
 unset FAIL_DIGEST
 [[ "$(basename -- "$(readlink -f "$rollback_root/current")")" == "$old_sha" ]]
 [[ "$(head -n1 "$TEST_STATE")" == "ghcr.io/example/app@$old_digest" ]]
+[[ "$(cat "$rollback_root/current/deploy/backup-agenda.sh")" == "legacy backup runner" ]]
+[[ "$(cat "$rollback_root/current/deploy/systemd/backup.service")" == "legacy backup unit" ]]
+[[ "$(cat "$rollback_root/releases/$rollback_id/deploy/backup-agenda.sh")" == "backup runner for $rollback_id" ]]
 
 # With no rollback target, a failed initial deployment leaves current absent,
 # retains the failed release for diagnosis, and clearly reports manual recovery.
